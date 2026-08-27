@@ -33,3 +33,8 @@ base44/.app.jsonc
 
 # Legacy Base44-Export (kein Teil der App)
 Katalog iPhone Ersatzteile.txt
+# Session-Interna (Freebuff)
+.freebuff/
+
+# Legacy Base44-Export (auch als ZIP)
+Katalog iPhone Ersatzteile.zip
