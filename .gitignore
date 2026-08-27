@@ -38,3 +38,6 @@ Katalog iPhone Ersatzteile.txt
 
 # Legacy Base44-Export (auch als ZIP)
 Katalog iPhone Ersatzteile.zip
+
+# Lokale Backup-Archive
+*.zip
