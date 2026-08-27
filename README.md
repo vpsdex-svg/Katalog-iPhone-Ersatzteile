@@ -53,44 +53,72 @@ Die App ist ein reines Static-Build — kein Server, kein Proxy.
 
 ## Supabase einrichten (RLS-Policies)
 
-Die App liest und schreibt direkt aus dem Browser. Dafür müssen die
-RLS-Policies öffentliches Lesen des Katalogs und Schreiben für angemeldete
-Nutzer erlauben. In Supabase → SQL Editor ausführen:
+Die App liest den Katalog öffentlich (anon key) und schreibt über den
+eingeloggten Nutzer (Supabase-Session). Die Policies sind **strikt**:
+Jeder darf lesen, aber **schreiben dürfen nur Admins** (Eintrag in der
+Tabelle `admin_users`). Das komplette, idempotente Skript liegt in
+[`supabase-rls-strict.sql`](supabase-rls-strict.sql) — im Supabase
+SQL Editor ausführen:
 
 ```sql
--- Öffentliches Lesen (Katalog)
-create policy "public_read_devices" on public.devices
-  for select using (true);
-create policy "public_read_device_parts" on public.device_parts
-  for select using (true);
-create policy "public_read_parts" on public.parts
-  for select using (true);
-create policy "public_read_categories" on public.categories
-  for select using (true);
-create policy "public_read_company" on public.company_settings
-  for select using (true);
+-- Kurzfassung (vollständiges Skript: supabase-rls-strict.sql)
 
--- Schreiben für angemeldete Nutzer (Admin-Bereich)
-create policy "auth_write_devices" on public.devices
-  for all to authenticated using (true) with check (true);
-create policy "auth_write_device_parts" on public.device_parts
-  for all to authenticated using (true) with check (true);
-create policy "auth_write_parts" on public.parts
-  for all to authenticated using (true) with check (true);
-create policy "auth_write_categories" on public.categories
-  for all to authenticated using (true) with check (true);
-create policy "auth_write_company" on public.company_settings
-  for all to authenticated using (true) with check (true);
+-- 1) Admin-Tabelle + is_admin()-Funktion
+create table if not exists public.admin_users (
+  user_id uuid primary key references auth.users (id) on delete cascade,
+  created_at timestamptz not null default now()
+);
+alter table public.admin_users enable row level security;
 
--- Storage: öffentlich lesen, Upload nur für angemeldete Nutzer
+create or replace function public.is_admin()
+returns boolean language sql security definer set search_path = public stable
+as $$ select exists (select 1 from public.admin_users where user_id = auth.uid()) $$;
+grant execute on function public.is_admin() to anon, authenticated;
+
+-- 2) Öffentliches Lesen (Katalog)
+create policy "public_read_devices" on public.devices for select using (true);
+create policy "public_read_device_parts" on public.device_parts for select using (true);
+create policy "public_read_parts" on public.parts for select using (true);
+create policy "public_read_categories" on public.categories for select using (true);
+create policy "public_read_company" on public.company_settings for select using (true);
+
+-- 3) Schreiben NUR für Admins
+drop policy if exists "auth_write_devices" on public.devices;
+create policy "admin_write_devices" on public.devices
+  for all to authenticated using (is_admin()) with check (is_admin());
+-- … entsprechend für device_parts, parts, categories, company_settings
+
+-- 4) Storage: lesen öffentlich, schreiben nur Admins
 create policy "public_read_device_images" on storage.objects
   for select using (bucket_id = 'device-images');
-create policy "auth_upload_device_images" on storage.objects
-  for insert to authenticated with check (bucket_id = 'device-images');
+drop policy if exists "auth_upload_device_images" on storage.objects;
+create policy "admin_upload_device_images" on storage.objects
+  for insert to authenticated with check (bucket_id = 'device-images' and is_admin());
 ```
 
-Falls Tabellen noch kein RLS haben, vorher aktivieren:
-`alter table public.<tabelle> enable row level security;`
+**Nach dem Ausführen einmalig den eigenen Account zum Admin machen**
+(danach kann kein anderer eingeloggter Nutzer mehr schreiben):
+
+```sql
+-- User-ID finden:
+select id, email from auth.users order by created_at;
+
+-- Admin eintragen (E-Mail einsetzen):
+insert into public.admin_users (user_id)
+select id from auth.users where email = 'deine-email@example.com';
+```
+
+**Verifikation** — alle aktiven Policies anzeigen:
+
+```sql
+select tablename, policyname, cmd, roles, qual, with_check
+from pg_policies
+where schemaname = 'public'
+order by tablename, cmd;
+```
+
+Hinweis: Der anon key ist öffentlich (steht im Build) — das ist normal.
+Die Sicherheit kommt ausschließlich aus den RLS-Policies oben.
 
 ## Produktion / Deployment
 
