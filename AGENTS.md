@@ -3,29 +3,30 @@
 ## Project Context
 
 Fixtop – iPhone Ersatzteil-Katalog: React 18 + Vite + Tailwind + shadcn/ui.
-Daten und Auth laufen über Supabase. Keine Base44-Abhängigkeit.
+Daten und Auth laufen direkt über Supabase (supabase-js im Browser).
+Keine Base44-Abhängigkeit, kein Server/Proxy.
 
 ## Key Files
 
-- `src/lib/supabaseClient.js`: Supabase Browser-Client (anon-Key aus `.env.local`).
+- `src/lib/supabaseClient.js`: Supabase-Browser-Client (anon key aus `.env.local`).
 - `src/lib/AuthContext.jsx`: Auth-Provider (Session, Login, Logout).
-- `src/lib/catalog-data.js`: Katalog-Datenzugriff (Browser → `/api/catalog`).
-- `src/lib/admin-api.js`: Admin-Datenzugriff (Browser → `/api/admin/*`).
-- `src/lib/supabase-catalog.js` / `supabase-admin-server.js`: serverseitige
-  Supabase-Abfragen für die Vite-Proxys.
-- `vite.config.js`: Vite-Konfiguration mit `/api/catalog`- und `/api/admin`-Proxys.
-- `.env.local`: lokale Secrets (gitignored): `VITE_SUPABASE_URL`,
-  `VITE_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` (nur serverseitig).
+- `src/lib/catalog-data.js`: öffentlicher Katalog-Zugriff (direkt via Supabase,
+  anon key + RLS).
+- `src/lib/admin-api.js`: Admin-Zugriff (direkt via Supabase, eingeloggte
+  Session + RLS).
+- `src/lib/supabase-catalog.js`: gemeinsame Helfer (z. B. `sortIphonesNewest`).
+- `vite.config.js`: reines Static-Build — keine Proxys, keine Secrets.
+- `.env.local` (gitignored): nur `VITE_SUPABASE_URL` und `VITE_SUPABASE_ANON_KEY`.
 
 ## Working Notes
 
-- `npm run dev` startet den Dev-Server inkl. Proxys. Der Service-Role-Key wird
-  ausschließlich serverseitig in den Proxys verwendet und darf nie in
-  Frontend-Code oder Commits landen.
-- Admin-Endpunkte prüfen das Supabase-Session-Token (`Bearer …`) gegen
-  `/auth/v1/user`; ohne gültiges Token → 401.
-- Felder in der Admin-API sind auf Whitelists beschränkt (siehe
-  `supabase-admin-server.js`).
+- Der anon key ist in Supabase bewusst öffentlich (steht in jedem Build).
+  Der Datenschutz kommt ausschließlich aus den RLS-Policies (öffentliches
+  Lesen des Katalogs, Schreiben nur für `authenticated`).
+- Es gibt keinen Service-Role-Key im Projekt — weder im Frontend noch im Build.
+- Admin-Schreibzugriffe laufen mit der Session des eingeloggten Nutzers; die
+  RLS-Policies entscheiden, was erlaubt ist.
+- `.env.local` niemals committen; keine Secrets in Code oder Commits ablegen.
 - Bei Auth-Flows (E-Mail-Bestätigung, Passwort-Reset, Google OAuth) müssen in
   den Supabase-Einstellungen die lokalen Redirect-URLs hinterlegt sein.
 - Vor dem Abschließen von Änderungen `npm run build` (und ggf. `npm run lint`)

@@ -30,3 +30,6 @@ dist-ssr
 .env
 .vite
 base44/.app.jsonc
+
+# Legacy Base44-Export (kein Teil der App)
+Katalog iPhone Ersatzteile.txt
