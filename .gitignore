@@ -1,6 +1,8 @@
 #env
 .env
 .env.*
+# Sandbox placeholders (no real secrets) must be committed for compose to start
+!.env.base44-defaults
 
 # Logs
 /logs
